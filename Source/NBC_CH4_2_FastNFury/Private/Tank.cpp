@@ -9,31 +9,35 @@
 #include "InputAction.h"
 #include "TankController.h"
 #include "JUtility.h"
+#include "Blueprint/UserWidget.h"
 #include "Camera/CameraComponent.h"
 #include "GameFramework/SpringArmComponent.h"
+#include "Kismet/GameplayStatics.h"
 
 ATank::ATank()
 {
-	FakeTankMesh = CreateDefaultSubobject<USkeletalMeshComponent>("FakeTankMesh");
 	SpringArm = CreateDefaultSubobject<USpringArmComponent>("Spring Arm");
 	Camera = CreateDefaultSubobject<UCameraComponent>("Camera");
+	TankSkeletalMesh = CreateDefaultSubobject<USkeletalMeshComponent>("Tank Skeletal Mesh");
 	
 	Camera->SetupAttachment(SpringArm);
 	SpringArm->SetupAttachment(RootComponent);
-	FakeTankMesh->SetupAttachment(RootComponent);
+	TankSkeletalMesh->SetupAttachment(GetMesh());
+	
+	bShouldInverseLookY = true;
 }
 
 void ATank::BeginPlay()
 {
 	Super::BeginPlay();
-	
 }
 
+
 void ATank::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
-{
-	MaxTorque = 1000.0f;
-	
+{	
 	Super::SetupPlayerInputComponent(PlayerInputComponent);
+
+	StopTurnInputDegreeThreshold = 25.0;
 	
 	ATankController* TankController 
 		= Cast<ATankController>(GetController());
@@ -44,62 +48,161 @@ void ATank::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 	JASSERT(IsValid(EnhancedInputComponent), "PlayerInputComponent is not UEnhancedInputComponent");
 	
 	EnhancedInputComponent->BindAction(
-		TankController->GetMoveAction()
+		TankController->GetThrottleAction()
 		, ETriggerEvent::Triggered
 		, this
-		, &ATank::OnMoveInput
+		, &ATank::OnThrottleInput
 	);
 	
 	EnhancedInputComponent->BindAction(
-		TankController->GetMoveAction()
+		TankController->GetThrottleAction()
 		, ETriggerEvent::Completed
 		, this
-		, &ATank::OnMoveInput
+		, &ATank::OnThrottleInput
 	);
+	
+	EnhancedInputComponent->BindAction(
+	TankController->GetBrakeAction()
+		, ETriggerEvent::Triggered
+		, this
+		, &ATank::OnBrakeInput
+	);
+	
+	EnhancedInputComponent->BindAction(
+		TankController->GetBrakeAction()
+		, ETriggerEvent::Completed
+		, this
+		, &ATank::OnBrakeInput
+	);
+	
+	EnhancedInputComponent->BindAction(
+		TankController->GetSteeringAction()
+		, ETriggerEvent::Started
+		, this
+		, &ATank::OnSteeringStart
+	);
+	
+	EnhancedInputComponent->BindAction(
+		TankController->GetSteeringAction()
+		, ETriggerEvent::Triggered
+		, this
+		, &ATank::OnSteeringInput
+	);	
+	
+	EnhancedInputComponent->BindAction(
+		TankController->GetSteeringAction()
+		, ETriggerEvent::Completed
+		, this
+		, &ATank::OnSteeringInput
+	);
+	
+	EnhancedInputComponent->BindAction(
+		TankController->GetLookAction()
+		, ETriggerEvent::Triggered
+		, this
+		, &ATank::OnLookInput);
+	
+	EnhancedInputComponent->BindAction(
+		TankController->GetLookAction()
+		, ETriggerEvent::Completed
+		, this
+		, &ATank::OnLookInput);
+}
+
+bool ATank::IsStopAddTurnInput() const
+{	FVector AngularVelocity = GetMesh()->GetPhysicsAngularVelocityInDegrees();
+	return  AngularVelocity.Length() >= StopTurnInputDegreeThreshold;
 }
 
 void ATank::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
 	
-	//forward or backward
-	if (FMath::IsNearlyZero(SteeringInput))
+	FHitResult HitResult;
+	FCollisionQueryParams QueryParams;
+	FVector3d Start = Camera->GetComponentLocation();
+	FVector3d End = Start + Camera->GetForwardVector() * 10000.0f;
+	
+	bool bHit = GetWorld()->LineTraceSingleByChannel(
+		HitResult
+		, Start
+		, End
+		, ECC_Visibility
+	);
+
+	
+	FVector3d Forward = GetActorForwardVector();
+	FVector3d PlanarFoward = FVector3d::VectorPlaneProject(Forward, FVector3d::UpVector);
+	FRotator PlanarForwardRotation = PlanarFoward.Rotation();
+	FRotator PlanarToTargetRotation(0.0f, 0.0f, 0.0f);
+	FVector3d ToTarget(0.0f, 0.0f, 0.0f);
+	FVector3d PlanarToTarget(0.0f, 0.0f, 0.0f);
+	if (bHit)
 	{
-		//JLog("No Steering Input");
-		LeftTorque = MaxTorque * ThrottleInput;
-		RightTorque = MaxTorque * ThrottleInput;
+		FVector3d HitPoint = HitResult.ImpactPoint;
+		FVector3d TankLocation = GetActorLocation();
+		ToTarget = HitPoint - TankLocation;		
 	}
-	//with steering
 	else
 	{
-		//JLog("With Steering Input");
-		LeftTorque = MaxTorque * SteeringInput * -1.0f;
-		RightTorque = MaxTorque * SteeringInput;
+		ToTarget = End - Start;
 	}
 	
-	UChaosWheeledVehicleMovementComponent* CastedVehicleMovementComponent 
-		= Cast<UChaosWheeledVehicleMovementComponent>( GetVehicleMovementComponent());
+	PlanarToTarget = FVector3d::VectorPlaneProject(ToTarget, FVector3d::UpVector);
+	PlanarToTargetRotation = PlanarToTarget.Rotation();
+		
+	TurretRotator = FMath::RInterpTo(TurretRotator, PlanarToTargetRotation, DeltaSeconds, TurretInterpSpeed);
 	
-	CastedVehicleMovementComponent->SetThrottleInput( ThrottleInput);
-	
-	// for (int32 i = LeftWheelIndexRange.Min; i< LeftWheelIndexRange.Max; ++i)
-	// {
-	// 	CastedVehicleMovementComponent->SetDriveTorque(LeftTorque, i);
-	// }
-	//
-	// for (int32 i = RightWheelIndexRange.Min; i< RightWheelIndexRange.Max; ++i)
-	// {
-	// 	CastedVehicleMovementComponent->SetDriveTorque(RightTorque, i);
-	// }
+	TurretAzimuth = TurretRotator.Yaw;
 }
 
-void ATank::OnMoveInput(const FInputActionInstance& Value)
+void ATank::OnThrottleInput(const FInputActionValue& Value)
 {
-	FVector2D MoveInput = Value.GetValue().Get<FVector2D>();
-	//x steering, y throttle
+	float ThrottleInput = Value.Get<float>();
+	JLog("Throttle : %f", ThrottleInput);
 	
-	ThrottleInput = MoveInput.Y;
-	SteeringInput = MoveInput.X;
+	GetVehicleMovementComponent()->SetThrottleInput(ThrottleInput);
+}
+
+void ATank::OnSteeringInput(const FInputActionValue& Value)
+{
+	float SteeringInput = Value.Get<float>();
+	JLog("Steering : %f", SteeringInput);
 	
-	//JLog("X : %f, Y: %f", MoveInput.X, MoveInput.Y);
+	if (IsStopAddTurnInput())
+	{
+		GetVehicleMovementComponent()->SetYawInput(0.0f);
+	}
+	else
+	{
+		GetVehicleMovementComponent()->SetYawInput(SteeringInput);
+	}
+}
+
+void ATank::OnSteeringStart(const FInputActionValue& Value)
+{
+	GetVehicleMovementComponent()->SetThrottleInput(0.1f);
+}
+
+void ATank::OnBrakeInput(const FInputActionValue& Value)
+{
+	float BrakeInput = Value.Get<float>();
+	JLog("Break : %f", BrakeInput);
+	
+	GetVehicleMovementComponent()->SetBrakeInput(BrakeInput);
+}
+
+void ATank::OnLookInput(const FInputActionValue& Value)
+{
+	FVector2D LookInput = Value.Get<FVector2D>();
+	float Elevation = (bShouldInverseLookY) ? -LookInput.Y : LookInput.Y;
+	float Azimuth = LookInput.X;
+		
+	AddControllerYawInput(Azimuth);
+	AddControllerPitchInput(Elevation);
+}
+
+FOnTankAimChanged& ATank::GetAimChangedDelegate()
+{
+	return OnTankAimChanged;
 }

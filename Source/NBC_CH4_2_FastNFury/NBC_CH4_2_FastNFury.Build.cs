@@ -8,7 +8,15 @@ public class NBC_CH4_2_FastNFury : ModuleRules
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 	
-		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "EnhancedInput" });
+		PublicDependencyModuleNames.AddRange(new string[]
+		{
+			"Core"
+			, "CoreUObject"
+			, "Engine"
+			, "InputCore"
+			, "EnhancedInput"
+			, "UMG"
+		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] {  });
 

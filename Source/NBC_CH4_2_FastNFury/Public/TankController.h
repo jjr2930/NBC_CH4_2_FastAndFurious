@@ -6,6 +6,7 @@
 #include "GameFramework/PlayerController.h"
 #include "TankController.generated.h"
 
+class UAimWidget;
 class UInputAction;
 class UInputMappingContext;
 /**
@@ -17,11 +18,15 @@ class NBC_CH4_2_FASTNFURY_API ATankController : public APlayerController
 	GENERATED_BODY()
 	
 public:
-	virtual void BeginPlay() override;
-	
-	UInputAction* GetMoveAction() const;
-	UInputAction* GetBreakAction() const;
+	UInputAction* GetThrottleAction() const;
+	UInputAction* GetBrakeAction() const;
 	UInputAction* GetSteeringAction() const;
+	UInputAction* GetLookAction() const;
+	
+protected:
+	virtual void BeginPlay() override;
+	virtual void OnPossess(APawn* InPawn) override;
+	
 protected:
 	UPROPERTY(Editanywhere, BlueprintReadOnly, Category="===TankController===|Inputs")
 	TObjectPtr<UInputMappingContext> MappingContext;
@@ -30,8 +35,16 @@ protected:
 	TObjectPtr<UInputAction> ThrottleAction;
 	
 	UPROPERTY(Editanywhere, BlueprintReadOnly, Category="===TankController===|Inputs")
-	TObjectPtr<UInputAction> BreakAction;
+	TObjectPtr<UInputAction> BrakeAction;
 	
 	UPROPERTY(Editanywhere, BlueprintReadOnly, Category="===TankController===|Inputs")
 	TObjectPtr<UInputAction> SteeringAction;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="===TankController===|Inputs")
+	TObjectPtr<UInputAction> LookAction;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="===Tank===|Properties")	
+	TSubclassOf<UUserWidget> AimWidget;
+	
+	TObjectPtr<UAimWidget> AimWidgetInstance;
 };

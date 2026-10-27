@@ -1,0 +1,11 @@
+﻿// Fill out your copyright notice in the Description page of Project Settings.
+
+
+#include "TankAnimInstance.h"
+
+void UTankAnimInstance::NativeThreadSafeUpdateAnimation(float DeltaSeconds)
+{
+	Super::NativeThreadSafeUpdateAnimation(DeltaSeconds);
+	
+	
+}

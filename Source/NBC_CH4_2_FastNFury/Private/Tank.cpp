@@ -148,12 +148,15 @@ void ATank::Tick(float DeltaSeconds)
 		ToTarget = End - Start;
 	}
 	
-	PlanarToTarget = FVector3d::VectorPlaneProject(ToTarget, FVector3d::UpVector);
-	PlanarToTargetRotation = PlanarToTarget.Rotation();
-		
-	TurretRotator = FMath::RInterpTo(TurretRotator, PlanarToTargetRotation, DeltaSeconds, TurretInterpSpeed);
+	FRotator ToTargetRotation = ToTarget.Rotation();
+	TotalRotator = FMath::RInterpTo(TotalRotator
+		, ToTargetRotation
+		, DeltaSeconds
+		, TurretInterpSpeed);
 	
-	TurretAzimuth = TurretRotator.Yaw;
+	TurretAzimuth = TotalRotator.Yaw;
+	BarrelElevation = -TotalRotator.Pitch;
+	BarrelElevation = BarrelElevationRange.Clamp(BarrelElevation);
 }
 
 void ATank::OnThrottleInput(const FInputActionValue& Value)

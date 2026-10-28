@@ -87,4 +87,5 @@ protected:
 	FOnTankAimChanged OnTankAimChanged;	
 	
 	FRotator TurretRotator;
+	FRotator TotalRotator;
 };
